@@ -256,6 +256,14 @@ func NewTLSPool(endpoint, certpath string) (*Pool, error) {
 // TLS pools are automatically configured if the DOCKER_CERT_PATH environment variable exists.
 func NewPool(endpoint string) (*Pool, error) {
 	if endpoint == "" {
+		homeDir, err := os.UserHomeDir()
+		if err != nil {
+			return nil, fmt.Errorf("failed to get user home directory: %w", err)
+		}
+		// Docker Desktop on linux does not expose a socket at /var/run/docker.sock but at ~/.docker/desktop/docker.sock
+		// This used to be available in the settings but has since been removed. While it has been returned on
+		// certain linux flavors it is still unavailable on Debian based flavors.
+		dockerDesktopSocketLinux := filepath.Join(homeDir, ".docker", "desktop", "docker.sock")
 		if os.Getenv("DOCKER_MACHINE_NAME") != "" {
 			client, err := dc.NewClientFromEnv()
 			if err != nil {
@@ -274,6 +282,8 @@ func NewPool(endpoint string) (*Pool, error) {
 			} else {
 				endpoint = "http://localhost:2375"
 			}
+		} else if _, err := os.Stat(dockerDesktopSocketLinux); err == nil {
+			endpoint = fmt.Sprintf("unix://%s", dockerDesktopSocketLinux)
 		} else {
 			endpoint = "unix:///var/run/docker.sock"
 		}
